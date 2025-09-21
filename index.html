@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Educational Explorer - Multi-Subject Learning</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; }
+        .glass-panel { 
+            backdrop-filter: blur(10px); 
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .module-btn {
+            transition: all 0.3s ease;
+            transform-style: preserve-3d;
+        }
+        .module-btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        .floating-animation {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        .pulse-animation {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+        .molecule-orbit {
+            animation: orbit 4s linear infinite;
+        }
+        @keyframes orbit {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @media (prefers-color-scheme: dark) {
+            .glass-panel {
+                background: rgba(0, 0, 0, 0.7);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+        }
+        /* Quiz modal styling */
+        .quiz-modal-bg {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                        background: {
+                            light: '#FFFFFF',
+                            dark: '#181818'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-indigo-900 via-purple-900 to-black text-white">
+
+    <!-- Module Selection Panel -->
+    <div id="module-selector" class="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center z-50">
+        <div class="text-center max-w-4xl mx-auto p-8">
+            <h1 class="text-5xl font-bold mb-4 floating-animation">🎓 3D Educational Explorer</h1>
+            <p class="text-xl mb-12 opacity-90">Choose your learning adventure</p>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <button class="module-btn glass-panel p-8 rounded-xl text-center" onclick="loadModule('astronomy')">
+                    <div class="text-6xl mb-4">🌌</div>
+                    <h3 class="text-2xl font-bold mb-2">Astronomy</h3>
+                    <p class="text-sm opacity-75">Explore the Solar System with realistic planets and orbital mechanics</p>
+                </button>
+
+                <button class="module-btn glass-panel p-8 rounded-xl text-center" onclick="loadModule('anatomy')">
+                    <div class="text-6xl mb-4">🫀</div>
+                    <h3 class="text-2xl font-bold mb-2">Human Anatomy</h3>
+                    <p class="text-sm opacity-75">Discover the human body with anatomically accurate 3D models</p>
+                </button>
+
+                <button class="module-btn glass-panel p-8 rounded-xl text-center" onclick="loadModule('chemistry')">
+                    <div class="text-6xl mb-4">⚛</div>
+                    <h3 class="text-2xl font-bold mb-2">Chemistry</h3>
+                    <p class="text-sm opacity-75">Explore molecular structures and chemical reactions</p>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main 3D Canvas -->
+    <div id="canvas-container" class="w-full h-screen relative hidden"></div>
+
+    <!-- Info Panel -->
+    <div id="info-panel" class="glass-panel absolute top-4 left-4 p-6 rounded-lg max-w-md z-10 hidden">
+        <div class="flex justify-between items-center mb-4">
+            <h1 id="module-title" class="text-2xl font-bold"></h1>
+            <button id="back-to-modules" class="bg-white bg-opacity-20 hover:bg-opacity-30 p-2 rounded transition-all">
+                🏠 Modules
+            </button>
+        </div>
+        <p id="module-description" class="text-sm mb-4"></p>
+        <div id="object-info" class="hidden">
+            <h3 id="object-name" class="text-xl font-semibold mb-2"></h3>
+            <p id="object-description" class="text-sm mb-3"></p>
+            <div id="object-stats" class="text-xs space-y-1 mb-3"></div>
+            <div id="object-actions" class="space-x-2">
+                <button id="quiz-btn" class="bg-primary hover:bg-purple-600 px-4 py-2 rounded text-sm font-medium transition-colors">
+                    Take Quiz
+                </button>
+                <button id="animate-btn" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded text-sm font-medium transition-colors hidden">
+                    Animate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls Panel -->
+    <div id="controls-panel" class="absolute top-4 right-4 space-y-2 z-10 hidden">
+        <button id="toggle-labels" class="glass-panel p-3 rounded-full transition-all">
+            🏷 Labels
+        </button>
+        <button id="toggle-animation" class="glass-panel p-3 rounded-full transition-all">
+            ⏸ Pause
+        </button>
+        <button id="reset-view" class="glass-panel p-3 rounded-full transition-all">
+            🎯 Reset
+        </button>
+        <button id="cross-section" class="glass-panel p-3 rounded-full transition-all hidden">
+            👁 View
+        </button>
+    </div>
+
+    <!-- Quiz Modal -->
+    <div id="quiz-modal" class="fixed inset-0 quiz-modal-bg flex items-center justify-center z-40 hidden">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full mx-4 shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="quiz-title" class="text-xl font-bold text-gray-800 dark:text-white"></h3>
+                <button id="quiz-close" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <p id="quiz-question" class="text-gray-700 dark:text-gray-300 mb-4"></p>
+            <div id="quiz-options" class="space-y-2 mb-4"></div>
+            <div class="flex justify-between">
+                <button id="quiz-next" class="px-4 py-2 bg-primary text-white hover:bg-purple-600 rounded transition-colors hidden">
+                    Next Question
+                </button>
+            </div>
+            <div id="quiz-result" class="mt-4 p-3 rounded hidden"></div>
+        </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loading" class="fixed inset-0 bg-gradient-to-br from-indigo-900 to-black flex items-center justify-center z-40 hidden">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-primary mb-4 mx-auto"></div>
+            <h2 class="text-2xl font-bold">Loading 3D Models...</h2>
+            <p id="loading-text" class="text-sm opacity-75 mt-2">Preparing educational content</p>
+        </div>
+    </div>
+
+    <script>
+        // Dark mode support
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        // Global variables
+        let scene, camera, renderer, controls;
+        let currentModule = null;
+        let objects = [];
+        let selectedObject = null;
+        let isAnimating = true;
+        let showLabels = true;
+        let anatomyViewMode = 'external'; // 'external' or 'internal'
+
+        // Educational data for all modules
+        const moduleData = {
+            astronomy: {
+                title: "🌌 Solar System Explorer",
+                description: "Explore our Solar System with realistic planets and orbital mechanics",
+                background: "space",
+                objects: {
+                    sun: {
+                        name: "Sun", radius: 3, distance: 0, color: 0xFDB813,
+                        description: "The Sun is our nearest star, a massive ball of nuclear fusion providing energy to the entire Solar System.",
+                        stats: { "Type": "G-type main-sequence star", "Temperature": "5,778 K", "Mass": "1.989 × 10³⁰ kg", "Diameter": "1.392 million km" },
+                        textureColors: [0xFDB813, 0xFF8C00, 0xFF4500],
+                        quiz: [{ question: "What type of star is the Sun?", options: ["Red giant", "White dwarf", "G-type main-sequence", "Blue supergiant"], correct: 2 }]
+                    },
+                    mercury: {
+                        name: "Mercury", radius: 0.4, distance: 8, color: 0x8C7853, speed: 0.04,
+                        description: "Mercury is the smallest planet and closest to the Sun with extreme temperature variations.",
+                        stats: { "Distance": "57.9 million km", "Day": "58.6 Earth days", "Temperature": "-173°C to 427°C" },
+                        textureColors: [0x8C7853, 0x9C8563, 0x7C6843],
+                        quiz: [{ question: "Mercury's day is longer than its year.", options: ["True", "False"], correct: 0 }]
+                    },
+                    venus: {
+                        name: "Venus", radius: 0.6, distance: 12, color: 0xFFC649, speed: 0.03,
+                        description: "Venus is the hottest planet due to its thick atmosphere causing a runaway greenhouse effect.",
+                        stats: { "Distance": "108.2 million km", "Temperature": "462°C", "Atmosphere": "96% CO₂" },
+                        textureColors: [0xFFC649, 0xFFD700, 0xFFA500],
+                        quiz: [{ question: "Why is Venus the hottest planet?", options: ["Closest to Sun", "Greenhouse effect", "Volcanic activity", "Solar storms"], correct: 1 }]
+                    },
+                    earth: {
+                        name: "Earth", radius: 0.6, distance: 16, color: 0x6B93D6, speed: 0.02,
+                        description: "Earth is the only known planet with life, featuring liquid water and a protective atmosphere.",
+                        stats: { "Distance": "149.6 million km", "Day": "24 hours", "Atmosphere": "78% N₂, 21% O₂" },
+                        textureColors: [0x6B93D6, 0x4F7942, 0x8B4513],
+                        quiz: [{ question: "What percentage of Earth's atmosphere is oxygen?", options: ["21%", "78%", "50%", "1%"], correct: 0 }]
+                    },
+                    mars: {
+                        name: "Mars", radius: 0.5, distance: 20, color: 0xCD5C5C, speed: 0.015,
+                        description: "Mars, the Red Planet, has the largest volcano and canyon in our Solar System.",
+                        stats: { "Distance": "227.9 million km", "Day": "24.6 hours", "Largest volcano": "Olympus Mons (21 km)" },
+                        textureColors: [0xCD5C5C, 0xA0522D, 0x8B4513],
+                        quiz: [{ question: "What gives Mars its red color?", options: ["Copper oxide", "Iron oxide", "Red sand", "Atmosphere"], correct: 1 }]
+                    },
+                    jupiter: {
+                        name: "Jupiter", radius: 1.8, distance: 28, color: 0xD8CA9D, speed: 0.01,
+                        description: "Jupiter is the largest planet, a gas giant with a Great Red Spot storm larger than Earth.",
+                        stats: { "Distance": "778.5 million km", "Day": "9.9 hours", "Moons": "95 known", "Mass": "2.5× all other planets" },
+                        textureColors: [0xD8CA9D, 0xF4A460, 0xDEB887],
+                        quiz: [{ question: "Jupiter's Great Red Spot is a:", options: ["Volcano", "Storm", "Moon", "Crater"], correct: 1 }]
+                    },
+                    saturn: {
+                        name: "Saturn", radius: 1.5, distance: 36, color: 0xFAD5A5, speed: 0.007,
+                        description: "Saturn is famous for its spectacular rings made of ice and rock particles.",
+                        stats: { "Distance": "1.432 billion km", "Day": "10.7 hours", "Density": "Less than water", "Rings": "Ice and rock" },
+                        textureColors: [0xFAD5A5, 0xDEB887, 0xF5DEB3],
+                        hasRings: true,
+                        quiz: [{ question: "Saturn's rings are made of:", options: ["Gas", "Solid rock", "Ice and rock particles", "Metal"], correct: 2 }]
+                    },
+                    uranus: {
+                        name: "Uranus", radius: 1.0, distance: 44, color: 0x4FD0E7, speed: 0.005,
+                        description: "Uranus is an ice giant with a unique sideways rotation and faint rings.",
+                        stats: { "Distance": "2.871 billion km", "Day": "17 hours", "Rings": "13 known rings", "Tilt": "97.77°" },
+                        hasRings: true,
+                        quiz: [{ question: "What is unique about Uranus's rotation?", options: ["It's the fastest", "It's backwards", "It's tilted on its side", "It has no rotation"], correct: 2 }]
+                    },
+                    neptune: {
+                        name: "Neptune", radius: 1.0, distance: 52, color: 0x4B70DD, speed: 0.004,
+                        description: "Neptune is the windiest planet with the strongest winds in the Solar System.",
+                        stats: { "Distance": "4.495 billion km", "Day": "16 hours", "Wind speed": "2,100 km/h", "Moons": "14 known" },
+                        quiz: [{ question: "What is the fastest wind speed recorded on Neptune?", options: ["500 km/h", "1,200 km/h", "2,100 km/h", "3,000 km/h"], correct: 2 }]
+                    }
+                }
+            },
+            anatomy: {
+                title: "🫀 Human Anatomy Explorer",
+                description: "Discover the human body with anatomically accurate 3D models and systems",
+                background: "medical",
+                objects: {
+                    humanBody: {
+                        name: "Human Body",
+                        description: "The human body is the entire structure of a human being, composed of many different types of cells that together create tissues and subsequently organ systems.",
+                        stats: { "Height": "1.7 m (average)", "Weight": "62 kg (average)", "Systems": "11 major systems", "Organs": "78 major organs" },
+                        quiz: [{ question: "How many major organ systems are in the human body?", options: ["9", "10", "11", "12"], correct: 2 }]
+                    },
+                    heart: {
+                        name: "Human Heart", size: 2, position: [0, 0, 0], color: 0xCC0000,
+                        description: "The heart is a muscular organ that pumps blood throughout the body via the circulatory system.",
+                        stats: { "Weight": "250-350 grams", "Beats per day": "~100,000", "Blood pumped": "5-6 liters/min", "Chambers": "4 (2 atria, 2 ventricles)" },
+                        parts: ["Right Atrium", "Right Ventricle", "Left Atrium", "Left Ventricle", "Aorta", "Pulmonary Artery"],
+                        animatable: true,
+                        quiz: [{ question: "How many chambers does the human heart have?", options: ["2", "3", "4", "5"], correct: 2 }]
+                    },
+                    skeleton: {
+                        name: "Human Skeleton", size: 4, position: [0, -2, 0], color: 0xFFF8DC,
+                        description: "The skeletal system provides structure, protects organs, and enables movement through muscle attachment.",
+                        stats: { "Total bones": "206 in adults", "Longest bone": "Femur (thighbone)", "Smallest bone": "Stapes (ear)", "Bone renewal": "Every 7-10 years" },
+                        parts: ["Skull", "Ribcage", "Spine", "Pelvis", "Femur", "Tibia", "Humerus", "Radius"],
+                        animatable: true,
+                        quiz: [{ question: "How many bones are in an adult human body?", options: ["206", "256", "306", "156"], correct: 0 }]
+                    },
+                    brain: {
+                        name: "Human Brain", size: 1.5, position: [0, 2, 0], color: 0xFFB6C1,
+                        description: "The brain is the control center of the nervous system, processing information and controlling body functions.",
+                        stats: { "Weight": "~1.4 kg", "Neurons": "~86 billion", "Energy use": "20% of body's energy", "Blood flow": "15-20% of cardiac output" },
+                        parts: ["Cerebrum", "Cerebellum", "Brainstem", "Frontal Lobe", "Parietal Lobe", "Temporal Lobe"],
+                        animatable: true,
+                        quiz: [{ question: "What percentage of the body's energy does the brain use?", options: ["10%", "20%", "30%", "40%"], correct: 1 }]
+                    },
+                    lungs: {
+                        name: "Human Lungs", size: 2, position: [0, 1, 0], color: 0xFFB6C1,
+                        description: "The lungs facilitate gas exchange, bringing oxygen into the body and removing carbon dioxide.",
+                        stats: { "Capacity": "6 liters total", "Breaths per day": "~20,000", "Alveoli": "~300 million", "Surface area": "~70 m²" },
+                        parts: ["Right Lung", "Left Lung", "Bronchi", "Bronchioles", "Alveoli", "Diaphragm"],
+                        animatable: true,
+                        quiz: [{ question: "How many alveoli are in human lungs?", options: ["300 thousand", "3 million", "30 million", "300 million"], correct: 3 }]
+                    }
+                }
+            },
+            chemistry: {
+                title: "⚛ Chemistry Explorer",
+                description: "Explore molecular structures, chemical bonds, and reactions in 3D",
+                background: "laboratory",
+                objects: {
+                    water: {
+                        name: "Water (H₂O)", size: 1, position: [0, 0, 0], color: 0x4FC3F7,
+                        description: "Water is a polar molecule essential for life, consisting of two hydrogen atoms bonded to one oxygen atom.",
+                        stats: { "Formula": "H₂O", "Bond angle": "104.5°", "Boiling point": "100°C", "Molecular weight": "18.015 g/mol" },
+                        atoms: [{ element: "O", color: 0xFF0000, size: 1.2 }, { element: "H", color: 0xFFFFFF, size: 0.8 }, { element: "H", color: 0xFFFFFF, size: 0.8 }],
+                        bonds: [[0, 1], [0, 2]],
+                        animatable: true,
+                        quiz: [{ question: "What is the bond angle in a water molecule?", options: ["90°", "104.5°", "120°", "180°"], correct: 1 }]
+                    },
+                    methane: {
+                        name: "Methane (CH₄)", size: 1, position: [6, 0, 0], color: 0x4CAF50,
+description: "Methane is the simplest hydrocarbon with tetrahedral geometry, commonly found in natural gas.",
+                        stats: { "Formula": "CH₄", "Bond angle": "109.5°", "Geometry": "Tetrahedral", "Molecular weight": "16.043 g/mol" },
+                        atoms: [{ element: "C", color: 0x000000, size: 1.2 }, { element: "H", color: 0xFFFFFF, size: 0.8 }, { element: "H", color: 0xFFFFFF, size: 0.8 }, { element: "H", color: 0xFFFFFF, size: 0.8 }, { element: "H", color: 0xFFFFFF, size: 0.8 }],
+                        bonds: [[0, 1], [0, 2], [0, 3], [0, 4]],
+                        animatable: true,
+                        quiz: [{ question: "What is the molecular geometry of methane?", options: ["Linear", "Bent", "Tetrahedral", "Trigonal"], correct: 2 }]
+                    },
+                    caffeine: {
+                        name: "Caffeine (C₈H₁₀N₄O₂)", size: 2, position: [-6, 0, 0], color: 0x8BC34A,
+                        description: "Caffeine is a stimulant compound found in coffee, tea, and chocolate with a complex ring structure.",
+                        stats: { "Formula": "C₈H₁₀N₄O₂", "Molecular weight": "194.19 g/mol", "Melting point": "235°C", "Half-life": "3-5 hours" },
+                        atoms: [
+                            { element: "C", color: 0x000000, size: 1.0 }, { element: "N", color: 0x0000FF, size: 1.0 },
+                            { element: "O", color: 0xFF0000, size: 1.1 }, { element: "C", color: 0x000000, size: 1.0 }
+                        ],
+                        animatable: true,
+                        quiz: [{ question: "Caffeine is classified as a:", options: ["Depressant", "Stimulant", "Hallucinogen", "Sedative"], correct: 1 }]
+                    },
+                    dna: {
+                        name: "DNA Double Helix", size: 3, position: [0, 0, 6], color: 0x9C27B0,
+                        description: "DNA contains genetic information in a double helix structure with complementary base pairs.",
+                        stats: { "Bases": "A, T, G, C", "Helix turn": "10.5 base pairs", "Diameter": "2 nanometers", "Discovery": "1953 (Watson & Crick)" },
+                        animatable: true,
+                        quiz: [{ question: "How many base pairs make one complete turn of the DNA helix?", options: ["8.5", "10.5", "12.5", "14.5"], correct: 1 }]
+                    }
+                }
+            }
+        };
+
+        function loadModule(moduleName) {
+            currentModule = moduleName;
+            const moduleInfo = moduleData[moduleName];
+            
+            // Show loading
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('loading-text').textContent = `Loading ${moduleInfo.title}...`;
+            
+            // Hide module selector
+            document.getElementById('module-selector').classList.add('hidden');
+            
+            setTimeout(() => {
+                // Show main interface
+                document.getElementById('canvas-container').classList.remove('hidden');
+                document.getElementById('info-panel').classList.remove('hidden');
+                document.getElementById('controls-panel').classList.remove('hidden');
+                
+                // Update UI
+                document.getElementById('module-title').textContent = moduleInfo.title;
+                document.getElementById('module-description').textContent = moduleInfo.description;
+                
+                // Show/hide module-specific controls
+                if (moduleName === 'anatomy') {
+                    document.getElementById('cross-section').classList.remove('hidden');
+                    // Reset view mode when loading anatomy module
+                    anatomyViewMode = 'external';
+                } else {
+                    document.getElementById('cross-section').classList.add('hidden');
+                }
+                
+                // Initialize 3D scene
+                init3D(moduleName);
+                
+                // Hide loading
+                document.getElementById('loading').classList.add('hidden');
+            }, 1000);
+        }
+
+        function init3D(moduleName) {
+            // Clear previous scene
+            if (renderer) {
+                document.getElementById('canvas-container').removeChild(renderer.domElement);
+            }
+            
+            // Scene setup
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Set background based on module
+            setModuleBackground(moduleName);
+            
+            // Camera position
+            camera.position.set(0, 5, 15);
+            camera.lookAt(0, 0, 0);
+
+            // Lighting
+            setupLighting(moduleName);
+
+            // Create objects based on module
+            objects = [];
+            if (moduleName === 'astronomy') {
+                createAstronomyObjects();
+            } else if (moduleName === 'anatomy') {
+                createAnatomyObjects();
+            } else if (moduleName === 'chemistry') {
+                createChemistryObjects();
+            }
+
+            // Setup controls
+            setupControls();
+            
+            // Start animation
+            animate();
+        }
+
+        function setModuleBackground(moduleName) {
+            switch(moduleName) {
+                case 'astronomy':
+                    scene.background = new THREE.Color(0x000011);
+                    // Add stars
+                    const starsGeometry = new THREE.BufferGeometry();
+                    const starsCount = 1000;
+                    const positions = new Float32Array(starsCount * 3);
+                    for (let i = 0; i < starsCount * 3; i++) {
+                        positions[i] = (Math.random() - 0.5) * 2000;
+                    }
+                    starsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                    const starsMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 2 });
+                    const stars = new THREE.Points(starsGeometry, starsMaterial);
+                    scene.add(stars);
+                    break;
+                case 'anatomy':
+                    scene.background = new THREE.Color(0x001122);
+                    break;
+                case 'chemistry':
+                    scene.background = new THREE.Color(0x111111);
+                    break;
+            }
+        }
+
+        function setupLighting(moduleName) {
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+            scene.add(ambientLight);
+
+            if (moduleName === 'astronomy') {
+                const sunLight = new THREE.PointLight(0xffffff, 2, 100);
+                sunLight.position.set(0, 0, 0);
+                sunLight.castShadow = true;
+                scene.add(sunLight);
+            } else {
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+                directionalLight.position.set(10, 10, 5);
+                directionalLight.castShadow = true;
+                scene.add(directionalLight);
+                
+                const fillLight = new THREE.DirectionalLight(0x4FC3F7, 0.3);
+                fillLight.position.set(-10, 5, -5);
+                scene.add(fillLight);
+            }
+        }
+
+        function createAstronomyObjects() {
+            const astronomyData = moduleData.astronomy.objects;
+            
+            Object.keys(astronomyData).forEach(key => {
+                const data = astronomyData[key];
+                
+                // Create planet with realistic texture-like appearance
+                const geometry = new THREE.SphereGeometry(data.radius, 32, 32);
+                
+                // Create material with vibrant colors
+                let material;
+                
+                if (key === 'sun') {
+                    // Sun with glowing effect
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0xFFD700,
+                        emissive: 0xFF4500,
+                        emissiveIntensity: 1.0
+                    });
+                    
+                    // Add corona effect
+                    const coronaGeometry = new THREE.SphereGeometry(data.radius * 1.2, 32, 32);
+                    const coronaMaterial = new THREE.MeshBasicMaterial({
+                        color: 0xFFA500,
+                        transparent: true,
+                        opacity: 0.4,
+                        side: THREE.BackSide
+                    });
+                    const corona = new THREE.Mesh(coronaGeometry, coronaMaterial);
+                    scene.add(corona);
+                } else if (key === 'mercury') {
+                    // Mercury - gray with craters
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0x8C7853
+                    });
+                    
+                    // Add craters
+                    for (let i = 0; i < 5; i++) {
+                        const craterGeometry = new THREE.SphereGeometry(data.radius * 0.1, 8, 8);
+                        const craterMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
+                        const crater = new THREE.Mesh(craterGeometry, craterMaterial);
+                        crater.position.set(
+                            (Math.random() - 0.5) * data.radius * 1.8,
+                            (Math.random() - 0.5) * data.radius * 1.8,
+                            (Math.random() - 0.5) * data.radius * 1.8
+                        );
+                        crater.scale.set(0.5, 0.5, 0.5);
+                        scene.add(crater);
+                    }
+                } else if (key === 'venus') {
+                    // Venus - yellowish with clouds
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0xFFC649
+                    });
+                    
+                    // Add cloud patterns
+                    const cloudGeometry = new THREE.SphereGeometry(data.radius * 1.01, 32, 32);
+                    const cloudMaterial = new THREE.MeshBasicMaterial({ 
+                        color: 0xFFFFCC, 
+                        transparent: true, 
+                        opacity: 0.3 
+                    });
+                    const clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
+                    scene.add(clouds);
+                } else if (key === 'earth') {
+                    // Earth - blue with green continents
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0x6B93D6
+                    });
+                    
+                    // Add continents
+                    for (let i = 0; i < 8; i++) {
+                        const continentGeometry = new THREE.SphereGeometry(data.radius * 1.01, 16, 16);
+                        const continentMaterial = new THREE.MeshBasicMaterial({ 
+                            color: 0x228B22, 
+                            transparent: true, 
+                            opacity: 0.6 
+                        });
+                        const continent = new THREE.Mesh(continentGeometry, continentMaterial);
+                        continent.rotation.set(
+                            Math.random() * Math.PI,
+                            Math.random() * Math.PI * 2,
+                            Math.random() * Math.PI
+                        );
+                        continent.scale.set(0.3, 0.3, 0.3);
+                        scene.add(continent);
+                    }
+                    
+                    // Add clouds
+                    const cloudGeometry = new THREE.SphereGeometry(data.radius * 1.02, 32, 32);
+                    const cloudMaterial = new THREE.MeshBasicMaterial({ 
+                        color: 0xFFFFFF, 
+                        transparent: true, 
+                        opacity: 0.2 
+                    });
+                    const clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
+                    scene.add(clouds);
+                } else if (key === 'mars') {
+                    // Mars - red with dark regions
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0xCD5C5C
+                    });
+                    
+                    // Add dark regions (like Valles Marineris)
+                    for (let i = 0; i < 3; i++) {
+                        const darkRegionGeometry = new THREE.SphereGeometry(data.radius * 1.01, 16, 16);
+                        const darkRegionMaterial = new THREE.MeshBasicMaterial({ 
+                            color: 0x8B0000, 
+                            transparent: true, 
+                            opacity: 0.4 
+                        });
+                        const darkRegion = new THREE.Mesh(darkRegionGeometry, darkRegionMaterial);
+                        darkRegion.rotation.set(
+                            Math.random() * Math.PI,
+                            Math.random() * Math.PI * 2,
+                            Math.random() * Math.PI
+                        );
+                        darkRegion.scale.set(0.4, 0.2, 0.4);
+                        scene.add(darkRegion);
+                    }
+                } else if (key === 'jupiter') {
+                    // Jupiter - banded with Great Red Spot
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0xD8CA9D
+                    });
+                    
+                    // Add bands
+                    for (let i = 0; i < 5; i++) {
+                        const bandGeometry = new THREE.SphereGeometry(data.radius * 1.01, 32, 32);
+                        const bandMaterial = new THREE.MeshBasicMaterial({ 
+                            color: [0xF4A460, 0xDEB887, 0xCD853F][i % 3], 
+                            transparent: true, 
+                            opacity: 0.4 
+                        });
+                        const band = new THREE.Mesh(bandGeometry, bandMaterial);
+                        band.rotation.z = (i - 2) * 0.2;
+                        band.scale.set(1, 0.2, 1);
+                        scene.add(band);
+                    }
+                    
+                    // Add Great Red Spot
+                    const spotGeometry = new THREE.SphereGeometry(data.radius * 0.2, 16, 16);
+                    const spotMaterial = new THREE.MeshBasicMaterial({ color: 0xCD5C5C });
+                    const spot = new THREE.Mesh(spotGeometry, spotMaterial);
+                    spot.position.set(data.radius * 0.7, data.radius * 0.3, 0);
+                    spot.scale.set(1, 0.5, 1);
+                    scene.add(spot);
+                } else if (key === 'saturn') {
+                    // Saturn - pale yellow with rings
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0xFAD5A5
+                    });
+                } else if (key === 'uranus') {
+                    // Uranus - cyan with rings
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0x4FD0E7
+                    });
+                } else if (key === 'neptune') {
+                    // Neptune - blue
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: 0x4B70DD
+                    });
+                    
+                    // Add dark spot (like Jupiter's Great Red Spot)
+                    const spotGeometry = new THREE.SphereGeometry(data.radius * 0.15, 16, 16);
+                    const spotMaterial = new THREE.MeshBasicMaterial({ color: 0x2E4BC7 });
+                    const spot = new THREE.Mesh(spotGeometry, spotMaterial);
+                    spot.position.set(data.radius * 0.6, data.radius * 0.2, 0);
+                    spot.scale.set(1, 0.5, 1);
+                    scene.add(spot);
+                } else {
+                    material = new THREE.MeshBasicMaterial({ 
+                        color: data.color
+                    });
+                }
+                
+                const planet = new THREE.Mesh(geometry, material);
+                planet.position.x = data.distance;
+                planet.castShadow = true;
+                planet.receiveShadow = true;
+                planet.userData = { key, data, type: 'planet' };
+
+                // Add rings for Saturn, Uranus, and Neptune
+                if (data.hasRings) {
+                    const ringGeometry = new THREE.RingGeometry(data.radius * 1.2, data.radius * 2.2, 64);
+                    let ringColor;
+                    if (key === 'saturn') {
+                        ringColor = 0xC4A747;
+                    } else if (key === 'uranus') {
+                        ringColor = 0x7FE5F0;
+                    } else if (key === 'neptune') {
+                        ringColor = 0x7A8FC8;
+                    }
+                                        
+                    const ringMaterial = new THREE.MeshBasicMaterial({ 
+                        color: ringColor, 
+                        transparent: true, 
+                        opacity: 0.7,
+                        side: THREE.DoubleSide
+                    });
+                    const rings = new THREE.Mesh(ringGeometry, ringMaterial);
+                    rings.rotation.x = Math.PI / 2;
+                    planet.add(rings);
+                    
+                    // Add multiple ring layers
+                    for (let i = 0; i < 3; i++) {
+                        const innerRingGeometry = new THREE.RingGeometry(
+                            data.radius * (1.1 + i * 0.2), 
+                            data.radius * (1.3 + i * 0.2), 
+                            64
+                        );
+                        let innerRingColor;
+                        if (key === 'saturn') {
+                            innerRingColor = [0xE6D690, 0xD4C896, 0xC4A747][i];
+                        } else if (key === 'uranus') {
+                            innerRingColor = [0x9EE7F0, 0x7FE5F0, 0x6FD5E0][i];
+                        } else if (key === 'neptune') {
+                            innerRingColor = [0x8A9FD8, 0x7A8FC8, 0x6A7FB8][i];
+                        }
+                        
+                        const innerRingMaterial = new THREE.MeshBasicMaterial({ 
+                            color: innerRingColor, 
+                            transparent: true, 
+                            opacity: 0.5 - i * 0.1,
+                            side: THREE.DoubleSide
+                        });
+                        const innerRing = new THREE.Mesh(innerRingGeometry, innerRingMaterial);
+                        innerRing.rotation.x = Math.PI / 2;
+                        planet.add(innerRing);
+                    }
+                }
+
+                // Add atmospheric glow for planets with atmospheres
+                if (['venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'].includes(key)) {
+                    const glowGeometry = new THREE.SphereGeometry(data.radius * 1.1, 32, 32);
+                    const glowMaterial = new THREE.MeshBasicMaterial({
+                        color: data.color,
+                        transparent: true,
+                        opacity: 0.1,
+                        side: THREE.BackSide
+                    });
+                    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                    planet.add(glow);
+                }
+
+                scene.add(planet);
+                objects.push(planet);
+
+                // Create orbital path
+                if (data.distance > 0) {
+                    const points = [];
+                    for (let i = 0; i <= 64; i++) {
+                        const theta = (i / 64) * Math.PI * 2;
+                        points.push(new THREE.Vector3(
+                            Math.cos(theta) * data.distance,
+                            0,
+                            Math.sin(theta) * data.distance
+                        ));
+                    }
+                    const orbitGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                    const orbitMaterial = new THREE.LineBasicMaterial({ 
+                        color: 0xffffff, 
+                        transparent: true, 
+                        opacity: 0.3 
+                    });
+                    const orbit = new THREE.Line(orbitGeometry, orbitMaterial);
+                    scene.add(orbit);
+                }
+            });
+        }
+
+        function createAnatomyObjects() {
+            const anatomyData = moduleData.anatomy.objects;
+            
+            // Create human body with both external and internal views
+            const humanBodyData = anatomyData.humanBody;
+            const humanBody = new THREE.Group();
+            humanBody.userData = { key: 'humanBody', data: humanBodyData, type: 'anatomy' };
+            
+            // Create external body view
+            const externalBody = createExternalBody(humanBodyData);
+            humanBody.add(externalBody);
+            
+            // Create internal body view (initially hidden)
+            const internalBody = createInternalBody(humanBodyData);
+            internalBody.visible = false;
+            humanBody.add(internalBody);
+            
+            scene.add(humanBody);
+            objects.push(humanBody);
+        }
+
+        function createExternalBody(data) {
+            const group = new THREE.Group();
+            const skinMaterial = new THREE.MeshPhongMaterial({ color: 0xFFDBAC });
+
+            // Head
+            const headGeometry = new THREE.SphereGeometry(0.8, 32, 32);
+            const head = new THREE.Mesh(headGeometry, skinMaterial);
+            head.position.set(0, 1.7, 0);
+            group.add(head);
+
+            // Neck
+            const neckGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 16);
+            const neck = new THREE.Mesh(neckGeometry, skinMaterial);
+            neck.position.set(0, 1.3, 0);
+            group.add(neck);
+
+            // Torso
+            const torsoGeometry = new THREE.CylinderGeometry(0.6, 0.8, 1.2, 16);
+            const torso = new THREE.Mesh(torsoGeometry, skinMaterial);
+            torso.position.set(0, 0.6, 0);
+            group.add(torso);
+
+            // Arms
+            // Left upper arm
+            const leftUpperArmGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.8, 16);
+            const leftUpperArm = new THREE.Mesh(leftUpperArmGeometry, skinMaterial);
+            leftUpperArm.position.set(-0.8, 1.0, 0);
+            leftUpperArm.rotation.z = Math.PI/4;
+            group.add(leftUpperArm);
+
+            // Left lower arm
+            const leftLowerArmGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.8, 16);
+            const leftLowerArm = new THREE.Mesh(leftLowerArmGeometry, skinMaterial);
+            leftLowerArm.position.set(-1.4, 0.5, 0);
+            leftLowerArm.rotation.z = Math.PI/4;
+            group.add(leftLowerArm);
+
+            // Right upper arm
+            const rightUpperArm = new THREE.Mesh(leftUpperArmGeometry, skinMaterial);
+            rightUpperArm.position.set(0.8, 1.0, 0);
+            rightUpperArm.rotation.z = -Math.PI/4;
+            group.add(rightUpperArm);
+
+            // Right lower arm
+            const rightLowerArm = new THREE.Mesh(leftLowerArmGeometry, skinMaterial);
+            rightLowerArm.position.set(1.4, 0.5, 0);
+            rightLowerArm.rotation.z = -Math.PI/4;
+            group.add(rightLowerArm);
+
+            // Legs
+            // Left upper leg
+            const leftUpperLegGeometry = new THREE.CylinderGeometry(0.25, 0.25, 1.0, 16);
+            const leftUpperLeg = new THREE.Mesh(leftUpperLegGeometry, skinMaterial);
+            leftUpperLeg.position.set(-0.3, -0.4, 0);
+            group.add(leftUpperLeg);
+
+            // Left lower leg
+            const leftLowerLegGeometry = new THREE.CylinderGeometry(0.2, 0.2, 1.0, 16);
+            const leftLowerLeg = new THREE.Mesh(leftLowerLegGeometry, skinMaterial);
+            leftLowerLeg.position.set(-0.3, -1.4, 0);
+            group.add(leftLowerLeg);
+
+            // Right upper leg
+            const rightUpperLeg = new THREE.Mesh(leftUpperLegGeometry, skinMaterial);
+            rightUpperLeg.position.set(0.3, -0.4, 0);
+            group.add(rightUpperLeg);
+
+            // Right lower leg
+            const rightLowerLeg = new THREE.Mesh(leftLowerLegGeometry, skinMaterial);
+            rightLowerLeg.position.set(0.3, -1.4, 0);
+            group.add(rightLowerLeg);
+
+            return group;
+        }
+
+        function createInternalBody(data) {
+            const group = new THREE.Group();
+            
+            // Create transparent body outline
+            const transparentMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xFFDBAC, 
+                transparent: true, 
+                opacity: 0.2,
+                depthWrite: false
+            });
+
+            // Head (transparent)
+            const headGeometry = new THREE.SphereGeometry(0.8, 32, 32);
+            const head = new THREE.Mesh(headGeometry, transparentMaterial);
+            head.position.set(0, 1.7, 0);
+            head.raycast = () => {}; // Make it non-clickable
+            group.add(head);
+
+            // Neck (transparent)
+            const neckGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 16);
+            const neck = new THREE.Mesh(neckGeometry, transparentMaterial);
+            neck.position.set(0, 1.3, 0);
+            neck.raycast = () => {};
+            group.add(neck);
+
+            // Torso (transparent)
+            const torsoGeometry = new THREE.CylinderGeometry(0.6, 0.8, 1.2, 16);
+            const torso = new THREE.Mesh(torsoGeometry, transparentMaterial);
+            torso.position.set(0, 0.6, 0);
+            torso.raycast = () => {};
+            group.add(torso);
+
+            // Arms (transparent)
+            const armGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.8, 16);
+            
+            const leftUpperArm = new THREE.Mesh(armGeometry, transparentMaterial);
+            leftUpperArm.position.set(-0.8, 1.0, 0);
+            leftUpperArm.rotation.z = Math.PI/4;
+            leftUpperArm.raycast = () => {};
+            group.add(leftUpperArm);
+
+            const leftLowerArm = new THREE.Mesh(armGeometry, transparentMaterial);
+            leftLowerArm.position.set(-1.4, 0.5, 0);
+            leftLowerArm.rotation.z = Math.PI/4;
+            leftLowerArm.raycast = () => {};
+            group.add(leftLowerArm);
+
+            const rightUpperArm = new THREE.Mesh(armGeometry, transparentMaterial);
+            rightUpperArm.position.set(0.8, 1.0, 0);
+            rightUpperArm.rotation.z = -Math.PI/4;
+            rightUpperArm.raycast = () => {};
+            group.add(rightUpperArm);
+
+            const rightLowerArm = new THREE.Mesh(armGeometry, transparentMaterial);
+            rightLowerArm.position.set(1.4, 0.5, 0);
+            rightLowerArm.rotation.z = -Math.PI/4;
+            rightLowerArm.raycast = () => {};
+            group.add(rightLowerArm);
+
+            // Legs (transparent)
+            const legGeometry = new THREE.CylinderGeometry(0.25, 0.25, 1.0, 16);
+            
+            const leftUpperLeg = new THREE.Mesh(legGeometry, transparentMaterial);
+            leftUpperLeg.position.set(-0.3, -0.4, 0);
+            leftUpperLeg.raycast = () => {};
+            group.add(leftUpperLeg);
+
+            const leftLowerLeg = new THREE.Mesh(legGeometry, transparentMaterial);
+            leftLowerLeg.position.set(-0.3, -1.4, 0);
+            leftLowerLeg.raycast = () => {};
+            group.add(leftLowerLeg);
+
+            const rightUpperLeg = new THREE.Mesh(legGeometry, transparentMaterial);
+            rightUpperLeg.position.set(0.3, -0.4, 0);
+            rightUpperLeg.raycast = () => {};
+            group.add(rightUpperLeg);
+
+            const rightLowerLeg = new THREE.Mesh(legGeometry, transparentMaterial);
+            rightLowerLeg.position.set(0.3, -1.4, 0);
+            rightLowerLeg.raycast = () => {};
+            group.add(rightLowerLeg);
+
+            // Add internal organs
+            const anatomyData = moduleData.anatomy.objects;
+            
+            // Heart
+            const heartData = anatomyData.heart;
+            const heart = createHeart(heartData);
+            heart.scale.set(0.4, 0.4, 0.4);
+            heart.position.set(0, 0.6, 0.2);
+            heart.userData = { key: 'heart', data: heartData, type: 'anatomy' };
+            group.add(heart);
+
+            // Lungs
+            const lungsData = anatomyData.lungs;
+            const lungs = createLungs(lungsData);
+            lungs.scale.set(0.4, 0.4, 0.4);
+            lungs.position.set(0, 0.8, -0.2);
+            lungs.userData = { key: 'lungs', data: lungsData, type: 'anatomy' };
+            group.add(lungs);
+
+            // Brain
+            const brainData = anatomyData.brain;
+            const brain = createBrain(brainData);
+            brain.scale.set(0.5, 0.5, 0.5);
+            brain.position.set(0, 1.7, 0);
+            brain.userData = { key: 'brain', data: brainData, type: 'anatomy' };
+            group.add(brain);
+
+            // Skeleton
+            const skeletonData = anatomyData.skeleton;
+            const skeleton = createSkeleton(skeletonData);
+            skeleton.scale.set(0.4, 0.4, 0.4);
+            skeleton.position.set(0, 0.2, 0);
+            skeleton.userData = { key: 'skeleton', data: skeletonData, type: 'anatomy' };
+            group.add(skeleton);
+
+            return group;
+        }
+
+        function createHeart(data) {
+            const group = new THREE.Group();
+            
+            // Main heart shape (simplified)
+            const heartGeometry = new THREE.SphereGeometry(data.size * 0.5, 16, 16);
+            const heartMaterial = new THREE.MeshPhongMaterial({ color: data.color });
+            const heart = new THREE.Mesh(heartGeometry, heartMaterial);
+            heart.scale.set(1, 1.2, 0.8);
+            group.add(heart);
+
+            // Chambers (4 parts)
+            const chambers = [
+                { pos: [-0.3, 0.2, 0], color: 0xAA0000, name: 'Right Atrium' },
+                { pos: [0.3, 0.2, 0], color: 0x880000, name: 'Left Atrium' },
+                { pos: [-0.3, -0.2, 0], color: 0xFF4444, name: 'Right Ventricle' },
+                { pos: [0.3, -0.2, 0], color: 0xFF6666, name: 'Left Ventricle' }
+            ];
+
+            chambers.forEach(chamber => {
+                const chamberGeometry = new THREE.SphereGeometry(data.size * 0.15, 8, 8);
+                const chamberMaterial = new THREE.MeshPhongMaterial({ 
+                    color: chamber.color, 
+                    transparent: true, 
+                    opacity: 0.8 
+                });
+                const chamberMesh = new THREE.Mesh(chamberGeometry, chamberMaterial);
+                chamberMesh.position.set(...chamber.pos);
+                // Add quiz data to each chamber
+                chamberMesh.userData = { 
+                    name: chamber.name, 
+                    data: { 
+                        name: chamber.name, 
+                        description: `The ${chamber.name.toLowerCase()} of the heart`, 
+                        stats: { "Part of": "Heart", "Function": "Pumping blood" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(chamberMesh);
+            });
+
+            return group;
+        }
+
+        function createSkeleton(data) {
+            const group = new THREE.Group();
+            
+            // Simplified skeleton structure
+            const boneColor = data.color;
+            const boneMaterial = new THREE.MeshPhongMaterial({ color: boneColor });
+            
+            // Skull
+            const skullGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+            const skull = new THREE.Mesh(skullGeometry, boneMaterial);
+            skull.position.set(0, 2.5, 0);
+            // Add quiz data to skull
+            skull.userData = { 
+                name: 'Skull', 
+                data: { 
+                    name: 'Skull', 
+                    description: "The bony structure that forms the head", 
+                    stats: { "Bones": "22 fused bones", "Function": "Protects the brain" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(skull);
+
+            // Spine
+            for (let i = 0; i < 10; i++) {
+                const vertebraGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.2, 8);
+                const vertebra = new THREE.Mesh(vertebraGeometry, boneMaterial);
+                vertebra.position.set(0, 2 - i * 0.25, 0);
+                // Add quiz data to each vertebra
+                vertebra.userData = { 
+                    name: `Vertebra ${i + 1}`, 
+                    data: { 
+                        name: `Vertebra ${i + 1}`, 
+                        description: `The ${i + 1}${getOrdinalSuffix(i+1)} vertebra in the spine`, 
+                        stats: { "Part of": "Spine", "Function": "Support and protection" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(vertebra);
+            }
+
+            // Ribs
+            for (let i = 0; i < 12; i++) {
+                const ribGeometry = new THREE.TorusGeometry(0.6, 0.05, 4, 12, Math.PI);
+                const rib = new THREE.Mesh(ribGeometry, boneMaterial);
+                rib.position.set(0, 1.5 - i * 0.15, 0);
+                rib.rotation.z = Math.PI / 2;
+                // Add quiz data to each rib
+                rib.userData = { 
+                    name: `Rib ${i + 1}`, 
+                    data: { 
+                        name: `Rib ${i + 1}`, 
+                        description: `The ${i + 1}${getOrdinalSuffix(i+1)} rib in the ribcage`, 
+                        stats: { "Part of": "Ribcage", "Function": "Protect organs" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(rib);
+            }
+
+            // Arms and legs (simplified)
+            const limbPositions = [
+                { pos: [-0.8, 1, 0], name: 'Left Arm' },
+                { pos: [0.8, 1, 0], name: 'Right Arm' },
+                { pos: [-0.3, -1.5, 0], name: 'Left Leg' },
+                { pos: [0.3, -1.5, 0], name: 'Right Leg' }
+            ];
+
+            limbPositions.forEach(limb => {
+                const limbGeometry = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 8);
+                const limbMesh = new THREE.Mesh(limbGeometry, boneMaterial);
+                limbMesh.position.set(...limb.pos);
+                // Add quiz data to each limb
+                limbMesh.userData = { 
+                    name: limb.name, 
+                    data: { 
+                        name: limb.name, 
+                        description: `The ${limb.name.toLowerCase()} of the human body`, 
+                        stats: { "Bones": "3 major bones", "Function": "Movement" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(limbMesh);
+            });
+
+            return group;
+        }
+
+        function createBrain(data) {
+            const group = new THREE.Group();
+            
+            // Main brain shape
+            const brainGeometry = new THREE.SphereGeometry(data.size * 0.5, 16, 16);
+            const brainMaterial = new THREE.MeshPhongMaterial({ color: data.color });
+            const brain = new THREE.Mesh(brainGeometry, brainMaterial);
+            brain.scale.set(1.2, 1, 1.4);
+            group.add(brain);
+
+            // Brain regions
+            const regions = [
+                { pos: [0.3, 0.1, 0.2], color: 0xFFAABB, name: 'Frontal Lobe' },
+                { pos: [-0.3, 0.1, 0.2], color: 0xAAFFBB, name: 'Parietal Lobe' },
+                { pos: [0, -0.2, 0.3], color: 0xAABBFF, name: 'Temporal Lobe' },
+                { pos: [0, -0.4, -0.2], color: 0xFFFFAA, name: 'Cerebellum' }
+            ];
+
+            regions.forEach(region => {
+                const regionGeometry = new THREE.SphereGeometry(data.size * 0.15, 8, 8);
+                const regionMaterial = new THREE.MeshPhongMaterial({ 
+                    color: region.color, 
+                    transparent: true, 
+                    opacity: 0.7 
+                });
+                const regionMesh = new THREE.Mesh(regionGeometry, regionMaterial);
+                regionMesh.position.set(...region.pos);
+                // Add quiz data to each region
+                regionMesh.userData = { 
+                    name: region.name, 
+                    data: { 
+                        name: region.name, 
+                        description: `The ${region.name.toLowerCase()} of the brain`, 
+                        stats: { "Part of": "Brain", "Function": "Cognitive processing" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(regionMesh);
+            });
+
+            return group;
+        }
+
+        function createLungs(data) {
+            const group = new THREE.Group();
+            
+            // Left lung
+            const leftLungGeometry = new THREE.SphereGeometry(data.size * 0.4, 16, 16);
+            const lungMaterial = new THREE.MeshPhongMaterial({ color: data.color });
+            const leftLung = new THREE.Mesh(leftLungGeometry, lungMaterial);
+            leftLung.position.set(-0.5, 0, 0);
+            leftLung.scale.set(0.8, 1.2, 0.6);
+            // Add quiz data to left lung
+            leftLung.userData = { 
+                name: 'Left Lung', 
+                data: { 
+                    name: 'Left Lung', 
+                    description: "The left lung of the human respiratory system", 
+                    stats: { "Lobes": "2", "Function": "Gas exchange" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(leftLung);
+
+            // Right lung
+            const rightLung = new THREE.Mesh(leftLungGeometry, lungMaterial);
+            rightLung.position.set(0.5, 0, 0);
+            rightLung.scale.set(0.8, 1.2, 0.6);
+            // Add quiz data to right lung
+            rightLung.userData = { 
+                name: 'Right Lung', 
+                data: { 
+                    name: 'Right Lung', 
+                    description: "The right lung of the human respiratory system", 
+                    stats: { "Lobes": "3", "Function": "Gas exchange" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(rightLung);
+
+            // Bronchi
+            const bronchiGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8);
+            const bronchiMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+            
+            const leftBronchi = new THREE.Mesh(bronchiGeometry, bronchiMaterial);
+            leftBronchi.position.set(-0.2, 0.3, 0);
+            leftBronchi.rotation.z = Math.PI / 6;
+            // Add quiz data to left bronchus
+            leftBronchi.userData = { 
+                name: 'Left Bronchus', 
+                data: { 
+                    name: 'Left Bronchus', 
+                    description: "The main airway to the left lung", 
+                    stats: { "Part of": "Respiratory system", "Function": "Air passage" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(leftBronchi);
+
+            const rightBronchi = new THREE.Mesh(bronchiGeometry, bronchiMaterial);
+            rightBronchi.position.set(0.2, 0.3, 0);
+            rightBronchi.rotation.z = -Math.PI / 6;
+            // Add quiz data to right bronchus
+            rightBronchi.userData = { 
+                name: 'Right Bronchus', 
+                data: { 
+                    name: 'Right Bronchus', 
+                    description: "The main airway to the right lung", 
+                    stats: { "Part of": "Respiratory system", "Function": "Air passage" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(rightBronchi);
+
+            return group;
+        }
+
+        function createChemistryObjects() {
+            const chemistryData = moduleData.chemistry.objects;
+            
+            Object.keys(chemistryData).forEach(key => {
+                const data = chemistryData[key];
+                let molecule;
+
+                switch(key) {
+                    case 'water':
+                        molecule = createWaterMolecule(data);
+                        break;
+                    case 'methane':
+                        molecule = createMethaneMolecule(data);
+                        break;
+                    case 'caffeine':
+                        molecule = createCaffeineMolecule(data);
+                        break;
+                    case 'dna':
+                        molecule = createDNAHelix(data);
+                        break;
+                }
+
+                if (molecule) {
+                    molecule.position.set(...data.position);
+                    molecule.userData = { key, data, type: 'molecule' };
+                    scene.add(molecule);
+                    objects.push(molecule);
+                }
+            });
+        }
+
+        function createWaterMolecule(data) {
+            const group = new THREE.Group();
+            
+            // Oxygen atom (center)
+            const oxygenGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+            const oxygenMaterial = new THREE.MeshPhongMaterial({ color: 0xFF0000 });
+            const oxygen = new THREE.Mesh(oxygenGeometry, oxygenMaterial);
+            oxygen.position.set(0, 0, 0);
+            // Add quiz data to oxygen atom
+            oxygen.userData = { 
+                element: 'O', 
+                name: 'Oxygen', 
+                data: { 
+                    name: 'Oxygen', 
+                    description: "Oxygen atom in water molecule", 
+                    stats: { "Atomic number": "8", "Electron configuration": "1s² 2s² 2p⁴" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(oxygen);
+
+            // Hydrogen atoms
+            const hydrogenGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+            const hydrogenMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
+            
+            const h1 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+            h1.position.set(0.8, 0.6, 0);
+            // Add quiz data to hydrogen atom
+            h1.userData = { 
+                element: 'H', 
+                name: 'Hydrogen 1', 
+                data: { 
+                    name: 'Hydrogen', 
+                    description: "Hydrogen atom in water molecule", 
+                    stats: { "Atomic number": "1", "Electron configuration": "1s¹" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(h1);
+
+            const h2 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+            h2.position.set(0.8, -0.6, 0);
+            // Add quiz data to hydrogen atom
+            h2.userData = { 
+                element: 'H', 
+                name: 'Hydrogen 2', 
+                data: { 
+                    name: 'Hydrogen', 
+                    description: "Hydrogen atom in water molecule", 
+                    stats: { "Atomic number": "1", "Electron configuration": "1s¹" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(h2);
+
+            // Bonds
+            const bondMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+            
+            // O-H bond 1
+            const bond1Geometry = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
+            const bond1 = new THREE.Mesh(bond1Geometry, bondMaterial);
+            bond1.position.set(0.4, 0.3, 0);
+            bond1.rotation.z = -Math.PI / 6;
+            // Add quiz data to bond
+            bond1.userData = { 
+                name: 'O-H Bond', 
+                data: { 
+                    name: 'O-H Bond', 
+                    description: "Covalent bond between oxygen and hydrogen", 
+                    stats: { "Bond length": "0.96 Å", "Bond energy": "467 kJ/mol" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(bond1);
+
+            // O-H bond 2
+            const bond2 = new THREE.Mesh(bond1Geometry, bondMaterial);
+            bond2.position.set(0.4, -0.3, 0);
+            bond2.rotation.z = Math.PI / 6;
+            // Add quiz data to bond
+            bond2.userData = { 
+                name: 'O-H Bond', 
+                data: { 
+                    name: 'O-H Bond', 
+                    description: "Covalent bond between oxygen and hydrogen", 
+                    stats: { "Bond length": "0.96 Å", "Bond energy": "467 kJ/mol" },
+                    quiz: data.quiz 
+                } 
+            };
+            group.add(bond2);
+
+            return group;
+        }
+        function createMethaneMolecule(data) {
+            const group = new THREE.Group();
+            
+            // Carbon atom (center)
+            const carbonGeometry = new THREE.SphereGeometry(0.25, 16, 16);
+            const carbonMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+            const carbon = new THREE.Mesh(carbonGeometry, carbonMaterial);
+            carbon.position.set(0, 0, 0);
+carbon.userData = { 
+    element: 'C', 
+    name: 'Carbon', 
+    data: { 
+        name: 'Carbon', 
+        description: 'Carbon is a nonmetal element, essential to life and found in all known biological molecules.', 
+        stats: { 
+            "Atomic number": "6", 
+            "Electron configuration": "1s² 2s² 2p²" 
+        }, 
+        quiz: [] 
+    } 
+};
+
+            group.add(carbon);
+
+            const hydrogenGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+            const hydrogenMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
+            const bondMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+            
+            const tetrahedralPositions = [
+                { pos: [1.0, 1.0, 1.0], name: 'Hydrogen 1' },
+                { pos: [-1.0, -1.0, 1.0], name: 'Hydrogen 2' },
+                { pos: [-1.0, 1.0, -1.0], name: 'Hydrogen 3' },
+                { pos: [1.0, -1.0, -1.0], name: 'Hydrogen 4' }
+            ];
+
+            tetrahedralPositions.forEach((hydrogen, i) => {
+                const h = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+                h.position.set(...hydrogen.pos);
+               
+                h.userData = { 
+                    element: 'H', 
+                    name: hydrogen.name, 
+                    data: { 
+                        name: 'Hydrogen', 
+                        description: "Hydrogen atom in methane molecule", 
+                        stats: { "Atomic number": "1", "Electron configuration": "1s¹" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(h);
+
+                // Bond
+                const bondGeometry = new THREE.CylinderGeometry(0.02, 0.02, 1.5, 8);
+                const bond = new THREE.Mesh(bondGeometry, bondMaterial);
+                bond.position.set(hydrogen.pos[0] / 2, hydrogen.pos[1] / 2, hydrogen.pos[2] / 2);
+                bond.lookAt(new THREE.Vector3(...hydrogen.pos));
+                // Add quiz data to bond
+                bond.userData = { 
+                    name: 'C-H Bond', 
+                    data: { 
+                        name: 'C-H Bond', 
+                        description: "Covalent bond between carbon and hydrogen", 
+                        stats: { "Bond length": "1.09 Å", "Bond energy": "435 kJ/mol" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(bond);
+            });
+
+            return group;
+        }
+
+        function createCaffeineMolecule(data) {
+            const group = new THREE.Group();
+            
+            // Simplified caffeine structure with rings
+            const ringPositions = [
+                { pos: [0, 0, 0], color: 0x000000, element: 'C', name: 'Carbon 1' },
+                { pos: [0.5, 0.3, 0], color: 0x0000FF, element: 'N', name: 'Nitrogen 1' },
+                { pos: [1.0, 0, 0], color: 0x000000, element: 'C', name: 'Carbon 2' },
+                { pos: [0.5, -0.3, 0], color: 0x000000, element: 'C', name: 'Carbon 3' },
+                { pos: [-0.5, 0.3, 0], color: 0xFF0000, element: 'O', name: 'Oxygen' },
+                { pos: [1.5, 0.3, 0], color: 0x0000FF, element: 'N', name: 'Nitrogen 2' }
+            ];
+
+            ringPositions.forEach((atom, i) => {
+                const atomGeometry = new THREE.SphereGeometry(0.2, 12, 12);
+                const atomMaterial = new THREE.MeshPhongMaterial({ color: atom.color });
+                const atomMesh = new THREE.Mesh(atomGeometry, atomMaterial);
+                atomMesh.position.set(...atom.pos);
+                // Add quiz data to atom
+                atomMesh.userData = { 
+                    element: atom.element, 
+                    name: atom.name, 
+                    data: { 
+                        name: atom.name, 
+                        description: `${atom.element} atom in caffeine molecule`, 
+                        stats: { 
+                            "Atomic number": atom.element === 'C' ? "6" : atom.element === 'N' ? "7" : "8",
+                            "Electron configuration": atom.element === 'C' ? "1s² 2s² 2p²" : atom.element === 'N' ? "1s² 2s² 2p³" : "1s² 2s² 2p⁴"
+                        }, 
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(atomMesh);
+            });
+
+            // Add bonds between atoms
+            const bondMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+            const bonds = [[0, 1], [1, 2], [2, 3], [3, 0], [1, 5], [0, 4]];
+            
+            bonds.forEach(bond => {
+                const pos1 = ringPositions[bond[0]].pos;
+                const pos2 = ringPositions[bond[1]].pos;
+                const distance = Math.sqrt((pos2[0] - pos1[0])**2 + (pos2[1] - pos1[1])**2);
+                
+                const bondGeometry = new THREE.CylinderGeometry(0.02, 0.02, distance, 8);
+                const bondMesh = new THREE.Mesh(bondGeometry, bondMaterial);
+                bondMesh.position.set(
+                    (pos1[0] + pos2[0]) / 2,
+                    (pos1[1] + pos2[1]) / 2,
+                    (pos1[2] + pos2[2]) / 2
+                );
+                bondMesh.rotation.z = Math.atan2(pos2[1] - pos1[1], pos2[0] - pos1[0]) - Math.PI / 2;
+                // Add quiz data to bond
+                bondMesh.userData = { 
+                    name: 'Covalent Bond', 
+                    data: { 
+                        name: 'Covalent Bond', 
+                        description: "Covalent bond in caffeine molecule", 
+                        stats: { "Bond type": "Single or double", "Function": "Holds atoms together" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(bondMesh);
+            });
+
+            return group;
+        }
+
+        function createDNAHelix(data) {
+            const group = new THREE.Group();
+            
+            const helixHeight = 4;
+            const helixRadius = 1;
+            const turns = 3;
+            const basePairsPerTurn = 10;
+            
+            // Create the double helix backbone
+            for (let strand = 0; strand < 2; strand++) {
+                const points = [];
+                for (let i = 0; i <= turns * basePairsPerTurn; i++) {
+                    const t = i / (turns * basePairsPerTurn);
+                    const angle = t * turns * Math.PI * 2 + strand * Math.PI;
+                    const y = t * helixHeight - helixHeight / 2;
+                    
+                    points.push(new THREE.Vector3(
+                        Math.cos(angle) * helixRadius,
+                        y,
+                        Math.sin(angle) * helixRadius
+                    ));
+                }
+                
+                const curve = new THREE.CatmullRomCurve3(points);
+                const tubeGeometry = new THREE.TubeGeometry(curve, 64, 0.05, 8, false);
+                const tubeMaterial = new THREE.MeshPhongMaterial({ 
+                    color: strand === 0 ? 0xFF6B6B : 0x4ECDC4 
+                });
+                const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+                // Add quiz data to DNA strand
+                tube.userData = { 
+                    name: `DNA Strand ${strand + 1}`, 
+                    data: { 
+                        name: `DNA Strand ${strand + 1}`, 
+                        description: `The ${strand === 0 ? "sugar-phosphate" : "complementary"} backbone of DNA`, 
+                        stats: { "Bases": "A, T, G, C", "Function": "Stores genetic information" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(tube);
+            }
+            
+            // Add base pairs
+            const baseColors = {
+                'A': 0xFFD93D, // Adenine - yellow
+                'T': 0x6BCF7F, // Thymine - green
+                'G': 0x4D96FF, // Guanine - blue
+                'C': 0xFF6B6B  // Cytosine - red
+            };
+            
+            const basePairs = ['A-T', 'T-A', 'G-C', 'C-G'];
+            
+            for (let i = 0; i < turns * basePairsPerTurn; i++) {
+                const t = i / (turns * basePairsPerTurn);
+                const angle = t * turns * Math.PI * 2;
+                const y = t * helixHeight - helixHeight / 2;
+                
+                const pair = basePairs[i % basePairs.length];
+                const base1 = pair[0];
+                const base2 = pair[1];
+                
+                // First base
+                const base1Geometry = new THREE.SphereGeometry(0.1, 8, 8);
+                const base1Material = new THREE.MeshPhongMaterial({ color: baseColors[base1] });
+                const base1Mesh = new THREE.Mesh(base1Geometry, base1Material);
+                base1Mesh.position.set(
+                    Math.cos(angle) * helixRadius,
+                    y,
+                    Math.sin(angle) * helixRadius
+                );
+                // Add quiz data to base
+                base1Mesh.userData = { 
+                    name: `Base ${base1}`, 
+                    data: { 
+                        name: `${base1} Base`, 
+                        description: `${base1} nucleotide base in DNA`, 
+                        stats: { "Pairs with": base2, "Structure": "Nitrogenous base" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(base1Mesh);
+                
+                // Second base
+                const base2Mesh = new THREE.Mesh(base1Geometry, new THREE.MeshPhongMaterial({ color: baseColors[base2] }));
+                base2Mesh.position.set(
+                    Math.cos(angle + Math.PI) * helixRadius,
+                    y,
+                    Math.sin(angle + Math.PI) * helixRadius
+                );
+                // Add quiz data to base
+                base2Mesh.userData = { 
+                    name: `Base ${base2}`, 
+                    data: { 
+                        name: `${base2} Base`, 
+                        description: `${base2} nucleotide base in DNA`, 
+                        stats: { "Pairs with": base1, "Structure": "Nitrogenous base" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(base2Mesh);
+                
+                // Bond between bases
+                const bondGeometry = new THREE.CylinderGeometry(0.02, 0.02, helixRadius * 2, 8);
+                const bondMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+                const bond = new THREE.Mesh(bondGeometry, bondMaterial);
+                bond.position.set(0, y, 0);
+                bond.rotation.z = Math.PI / 2;
+                bond.rotation.y = angle;
+                // Add quiz data to bond
+                bond.userData = { 
+                    name: 'Hydrogen Bond', 
+                    data: { 
+                        name: 'Hydrogen Bond', 
+                        description: "Hydrogen bond between complementary bases", 
+                        stats: { "Bond type": "Hydrogen", "Strength": "Weak" },
+                        quiz: data.quiz 
+                    } 
+                };
+                group.add(bond);
+            }
+            
+            return group;
+        }
+
+        function setupControls() {
+            // Simple orbit controls implementation
+            let mouseDown = false;
+            let mouseX = 0;
+            let mouseY = 0;
+            let targetRotationX = 0;
+            let targetRotationY = 0;
+            let targetDistance = 15;
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                mouseDown = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (!mouseDown) return;
+                
+                const deltaX = e.clientX - mouseX;
+                const deltaY = e.clientY - mouseY;
+                
+                targetRotationY += deltaX * 0.01;
+                targetRotationX += deltaY * 0.01;
+                
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            renderer.domElement.addEventListener('mouseup', () => {
+                mouseDown = false;
+            });
+
+            renderer.domElement.addEventListener('wheel', (e) => {
+                targetDistance += e.deltaY * 0.01;
+                targetDistance = Math.max(5, Math.min(50, targetDistance));
+            });
+
+            // Update camera position
+            function updateCamera() {
+                camera.position.x = Math.sin(targetRotationY) * targetDistance;
+                camera.position.z = Math.cos(targetRotationY) * targetDistance;
+                camera.position.y = Math.sin(targetRotationX) * targetDistance;
+                camera.lookAt(0, 0, 0);
+            }
+
+            // Raycaster for object selection
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            renderer.domElement.addEventListener('click', (e) => {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(scene.children, true);
+
+                if (intersects.length > 0) {
+                    let clickedObject = intersects[0].object;
+                    
+                    // Traverse up to find object with userData
+                    while (clickedObject && !clickedObject.userData.data) {
+                        clickedObject = clickedObject.parent;
+                    }
+                    
+                    if (clickedObject && clickedObject.userData.data) {
+                        selectObject(clickedObject);
+                    }
+                }
+            });
+
+            // Add updateCamera to animation loop
+            window.updateCamera = updateCamera;
+        }
+
+        function selectObject(object) {
+            selectedObject = object;
+            const data = object.userData.data;
+            
+            // Update info panel
+            document.getElementById('object-info').classList.remove('hidden');
+            document.getElementById('object-name').textContent = data.name;
+            document.getElementById('object-description').textContent = data.description;
+            
+            // Update stats
+            const statsContainer = document.getElementById('object-stats');
+            statsContainer.innerHTML = '';
+            Object.entries(data.stats).forEach(([key, value]) => {
+                const statDiv = document.createElement('div');
+                statDiv.innerHTML = `<strong>${key}:</strong> ${value}`;
+                statsContainer.appendChild(statDiv);
+            });
+            
+            // Show animate button if object is animatable
+            const animateBtn = document.getElementById('animate-btn');
+            if (data.animatable) {
+                animateBtn.classList.remove('hidden');
+            } else {
+                animateBtn.classList.add('hidden');
+            }
+            
+            // Highlight selected object
+            objects.forEach(obj => {
+                if (obj.material) {
+                    obj.material.emissive = new THREE.Color(0x000000);
+                }
+            });
+            
+            if (object.material) {
+                object.material.emissive = new THREE.Color(0x444444);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (isAnimating) {
+                // Animate planets in astronomy
+                if (currentModule === 'astronomy') {
+                    const astronomyData = moduleData.astronomy.objects;
+                    Object.keys(astronomyData).forEach(key => {
+                        const data = astronomyData[key];
+                        const planet = objects.find(obj => obj.userData.key === key);
+                        if (planet && data.speed) {
+                            const angle = Date.now() * data.speed * 0.001;
+                            planet.position.x = Math.cos(angle) * data.distance;
+                            planet.position.z = Math.sin(angle) * data.distance;
+                        }
+                    });
+                }
+                
+                // Animate molecules in chemistry
+                if (currentModule === 'chemistry') {
+                    objects.forEach(obj => {
+                        if (obj.userData.type === 'molecule') {
+                            obj.rotation.y += 0.005;
+                        }
+                    });
+                }
+            }
+            
+            // Update camera
+            if (window.updateCamera) {
+                window.updateCamera();
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        function getOrdinalSuffix(num) {
+            const j = num % 10;
+            const k = num % 100;
+            if (j == 1 && k != 11) {
+                return "st";
+            }
+            if (j == 2 && k != 12) {
+                return "nd";
+            }
+            if (j == 3 && k != 13) {
+                return "rd";
+            }
+            return "th";
+        }
+
+        // Event listeners
+        document.getElementById('back-to-modules').addEventListener('click', () => {
+            document.getElementById('canvas-container').classList.add('hidden');
+            document.getElementById('info-panel').classList.add('hidden');
+            document.getElementById('controls-panel').classList.add('hidden');
+            document.getElementById('module-selector').classList.remove('hidden');
+            currentModule = null;
+        });
+
+        document.getElementById('toggle-labels').addEventListener('click', (e) => {
+            showLabels = !showLabels;
+            e.target.textContent = showLabels ? '🏷️ Labels' : '🏷️ No Labels';
+        });
+
+        document.getElementById('toggle-animation').addEventListener('click', (e) => {
+            isAnimating = !isAnimating;
+            e.target.textContent = isAnimating ? '⏸️ Pause' : '▶️ Play';
+        });
+
+        document.getElementById('reset-view').addEventListener('click', () => {
+            camera.position.set(0, 5, 15);
+            camera.lookAt(0, 0, 0);
+            if (window.updateCamera) {
+                window.targetRotationX = 0;
+                window.targetRotationY = 0;
+                window.targetDistance = 15;
+            }
+        });
+
+        document.getElementById('cross-section').addEventListener('click', (e) => {
+            if (currentModule === 'anatomy') {
+                const humanBody = objects.find(obj => obj.userData.key === 'humanBody');
+                if (humanBody) {
+                    anatomyViewMode = anatomyViewMode === 'external' ? 'internal' : 'external';
+                    humanBody.children[0].visible = anatomyViewMode === 'external';
+                    humanBody.children[1].visible = anatomyViewMode === 'internal';
+                    e.target.textContent = anatomyViewMode === 'external' ? '👁️ View' : '🫀 Internal';
+                }
+            }
+        });
+
+        document.getElementById('quiz-btn').addEventListener('click', () => {
+            if (selectedObject && selectedObject.userData.data.quiz) {
+                showQuiz(selectedObject.userData.data);
+            }
+        });
+
+        document.getElementById('animate-btn').addEventListener('click', () => {
+            if (selectedObject && selectedObject.userData.data.animatable) {
+                // Simple animation for selected object
+                const originalRotation = selectedObject.rotation.clone();
+                const targetRotation = new THREE.Euler(
+                    originalRotation.x + Math.PI * 2,
+                    originalRotation.y + Math.PI * 2,
+                    originalRotation.z
+                );
+                
+                let progress = 0;
+                const animateStep = () => {
+                    progress += 0.02;
+                    if (progress <= 1) {
+                        selectedObject.rotation.x = originalRotation.x + (targetRotation.x - originalRotation.x) * progress;
+                        selectedObject.rotation.y = originalRotation.y + (targetRotation.y - originalRotation.y) * progress;
+                        selectedObject.rotation.z = originalRotation.z + (targetRotation.z - originalRotation.z) * progress;
+                        requestAnimationFrame(animateStep);
+                    }
+                };
+                animateStep();
+            }
+        });
+
+        document.getElementById('quiz-close').addEventListener('click', () => {
+            document.getElementById('quiz-modal').classList.add('hidden');
+        });
+
+        document.getElementById('quiz-next').addEventListener('click', () => {
+            // For simplicity, just close the quiz
+            document.getElementById('quiz-modal').classList.add('hidden');
+        });
+
+        function showQuiz(data) {
+            const quiz = data.quiz[0]; // Get first quiz question
+            document.getElementById('quiz-title').textContent = `Quiz: ${data.name}`;
+            document.getElementById('quiz-question').textContent = quiz.question;
+            
+            const optionsContainer = document.getElementById('quiz-options');
+            optionsContainer.innerHTML = '';
+            
+            quiz.options.forEach((option, index) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'p-3 bg-gray-100 dark:bg-gray-700 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors';
+                optionDiv.textContent = option;
+                optionDiv.addEventListener('click', () => checkAnswer(index, quiz.correct));
+                optionsContainer.appendChild(optionDiv);
+            });
+            
+            document.getElementById('quiz-modal').classList.remove('hidden');
+            document.getElementById('quiz-result').classList.add('hidden');
+            document.getElementById('quiz-next').classList.add('hidden');
+        }
+
+        function checkAnswer(selected, correct) {
+            const resultDiv = document.getElementById('quiz-result');
+            resultDiv.classList.remove('hidden');
+            
+            if (selected === correct) {
+                resultDiv.className = 'mt-4 p-3 rounded bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
+                resultDiv.textContent = '✓ Correct! Well done!';
+            } else {
+                resultDiv.className = 'mt-4 p-3 rounded bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200';
+                resultDiv.textContent = '✗ Incorrect. Try again!';
+            }
+            
+            document.getElementById('quiz-next').classList.remove('hidden');
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+    </script>
+</body>
+</html>
